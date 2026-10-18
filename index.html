@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reflex Rush - Pro Esports Voice Edition</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
+  <!-- P2P WebRTC Voice Chat Library (Zero Backend Needed) -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  
+  <style>
+    :root {
+      --primary: #00f0ff;
+      --accent: #ff0055;
+      --warning: #ffe600;
+      --success: #00ff66;
+      --panda-white: #f8fafc;
+      --panda-dark: #0f172a;
+      --card-bg: rgba(15, 23, 42, 0.82);
+      --border-glow: rgba(0, 240, 255, 0.28);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      user-select: none;
+    }
+
+    body {
+      background: #060814;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 15px 15px 50px;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Ambient Canvas & Perspective Floor */
+    #bgCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: -2;
+      pointer-events: none;
+    }
+
+    .cyber-grid-floor {
+      position: fixed;
+      bottom: 0;
+      left: -50%;
+      width: 200%;
+      height: 45vh;
+      background-image: 
+        linear-gradient(rgba(0, 240, 255, 0.15) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 240, 255, 0.15) 1px, transparent 1px);
+      background-size: 50px 50px;
+      transform: perspective(400px) rotateX(65deg);
+      transform-origin: bottom center;
+      animation: gridScroll 12s linear infinite;
+      z-index: -1;
+      opacity: 0.55;
+      mask-image: linear-gradient(to top, rgba(0,0,0,1) 10%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,1) 10%, transparent 100%);
+    }
+
+    @keyframes gridScroll {
+      0% { background-position: 0 0; }
+      100% { background-position: 0 500px; }
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 12px;
+      z-index: 2;
+    }
+
+    h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(24px, 5vw, 38px);
+      letter-spacing: 2px;
+      background: linear-gradient(90deg, #fff, var(--primary), var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 25px rgba(0, 240, 255, 0.45);
+    }
+
+    .badge-sub {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      padding: 4px 14px;
+      border-radius: 50px;
+      font-size: 11px;
+      color: #94a3b8;
+      backdrop-filter: blur(8px);
+      margin-top: 4px;
+    }
+
+    /* Voice Comms Bar */
+    .voice-comms-card {
+      width: 100%;
+      max-width: 950px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(0, 255, 102, 0.3);
+      box-shadow: 0 0 20px rgba(0, 255, 102, 0.15);
+      border-radius: 16px;
+      padding: 10px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 15px;
+      backdrop-filter: blur(12px);
+      z-index: 2;
+    }
+
+    .voice-id-tag {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px;
+      color: var(--success);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .voice-id-badge {
+      background: rgba(0, 255, 102, 0.15);
+      border: 1px dashed var(--success);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-weight: 800;
+      cursor: pointer;
+      letter-spacing: 1px;
+    }
+
+    .voice-join-box {
+      display: flex;
+      gap: 8px;
+      flex: 1 1 240px;
+      max-width: 380px;
+    }
+
+    .voice-join-box input {
+      flex: 1;
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .voice-btn {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      color: #fff;
+      background: linear-gradient(45deg, #059669, #10b981);
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+      transition: all 0.2s;
+    }
+    .voice-btn:hover { transform: scale(1.04); }
+
+    .mic-controls { display: flex; align-items: center; gap: 8px; }
+    
+    .mic-toggle-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      transition: all 0.2s;
+    }
+    .mic-toggle-btn.muted { 
+      background: rgba(255, 0, 85, 0.2); 
+      border-color: var(--accent); 
+      color: var(--accent); 
+    }
+
+    .wave-pulse {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+      animation: pulseGreen 1.2s infinite;
+    }
+    @keyframes pulseGreen { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.4); opacity: 0.5; } }
+
+    /* Panda Mascot */
+    .mascot-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .panda-character {
+      width: 120px;
+      height: 105px;
+      position: relative;
+      animation: pandaHover 3s ease-in-out infinite;
+      transition: transform 0.25s;
+      filter: drop-shadow(0 10px 20px rgba(0, 240, 255, 0.25));
+    }
+
+    .ear {
+      position: absolute; width: 32px; height: 32px;
+      background: var(--panda-dark); border-radius: 50%;
+      top: 5px; border: 2px solid rgba(0, 240, 255, 0.2);
+    }
+    .ear.left { left: 10px; transform: rotate(-25deg); }
+    .ear.right { right: 10px; transform: rotate(25deg); }
+
+    .head {
+      position: absolute; width: 95px; height: 78px;
+      background: radial-gradient(circle at 50% 30%, #ffffff 0%, #e2e8f0 100%);
+      border-radius: 50% 50% 46% 46%; top: 16px; left: 13px; z-index: 2;
+    }
+
+    .eye-patch {
+      position: absolute; width: 22px; height: 28px;
+      background: var(--panda-dark); border-radius: 50% 50% 45% 45%; top: 20px;
+    }
+    .eye-patch.left { left: 15px; transform: rotate(-18deg); }
+    .eye-patch.right { right: 15px; transform: rotate(18deg); }
+
+    .pupil {
+      position: absolute; width: 8px; height: 8px;
+      background: #fff; border-radius: 50%; top: 8px; left: 7px;
+      animation: pandaBlink 3.8s infinite;
+    }
+    .pupil::after {
+      content: ''; position: absolute; width: 3px; height: 3px;
+      background: var(--primary); border-radius: 50%; top: 2px; left: 2px;
+    }
+
+    .nose { position: absolute; width: 14px; height: 8px; background: var(--panda-dark); border-radius: 50%; top: 42px; left: 41px; }
+    .mouth { position: absolute; width: 16px; height: 8px; border-bottom: 2.5px solid var(--panda-dark); border-radius: 0 0 12px 12px; top: 52px; left: 40px; }
+    .blush { position: absolute; width: 12px; height: 6px; background: rgba(255, 0, 85, 0.4); border-radius: 50%; top: 42px; }
+    .blush.left { left: 8px; } .blush.right { right: 8px; }
+    .bamboo {
+      position: absolute; width: 6px; height: 44px;
+      background: linear-gradient(#22c55e, #15803d); border-radius: 3px;
+      right: 0px; top: 30px; transform: rotate(25deg); z-index: 5;
+    }
+
+    .panda-dialogue {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1.5px solid var(--primary);
+      padding: 5px 16px;
+      border-radius: 30px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #e2e8f0;
+      margin-top: 4px;
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+      text-align: center;
+    }
+
+    .panda-character.happy { transform: translateY(-10px) scale(1.1); }
+    .panda-character.happy .mouth { height: 12px; background: #ff0055; border: none; }
+    .panda-character.shocked { animation: pandaShock 0.4s ease-in-out infinite; }
+    .panda-character.shocked .mouth { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--panda-dark); left: 43px; }
+
+    @keyframes pandaHover { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+    @keyframes pandaBlink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
+    @keyframes pandaShock { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-5px, 2px) rotate(-6deg); } 75% { transform: translate(5px, -2px) rotate(6deg); } }
+
+    /* Layout */
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      width: 100%;
+      max-width: 950px;
+      justify-content: center;
+      z-index: 1;
+    }
+
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(18px);
+      border: 1px solid var(--border-glow);
+      border-radius: 20px;
+      padding: 22px;
+      flex: 1 1 420px;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+      position: relative;
+    }
+
+    .controls { display: flex; gap: 10px; margin-bottom: 14px; }
+    
+    input[type="text"] {
+      flex: 1;
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1.5px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: var(--primary); }
+
+    .btn {
+      padding: 10px 20px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      color: #fff;
+      background: linear-gradient(45deg, var(--accent), #ff5e00);
+      box-shadow: 0 4px 15px rgba(255, 0, 85, 0.4);
+      transition: all 0.2s;
+    }
+    .btn:hover { transform: translateY(-2px) scale(1.03); }
+
+    /* 4-Stat Esports Dashboard */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .stat-pill {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 8px 4px;
+      border-radius: 10px;
+      text-align: center;
+    }
+
+    .stat-label { font-size: 10px; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.5px; }
+    .stat-val { font-family: 'Orbitron', sans-serif; font-size: 16px; font-weight: 800; }
+
+    #timerDisplay { color: var(--warning); }
+    #scoreDisplay { color: var(--primary); }
+    #accuracyDisplay { color: var(--success); }
+    #streakDisplay { color: var(--accent); }
+
+    /* Arena */
+    #arena {
+      position: relative;
+      height: 270px;
+      background: radial-gradient(circle, rgba(0, 240, 255, 0.05) 0%, rgba(0, 0, 0, 0.75) 100%);
+      border: 2px dashed rgba(0, 240, 255, 0.35);
+      border-radius: 16px;
+      overflow: hidden;
+      cursor: crosshair;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #arena.shake { animation: screenShake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+
+    @keyframes screenShake {
+      10%, 90% { transform: translate3d(-3px, 0, 0); }
+      20%, 80% { transform: translate3d(5px, 0, 0); }
+      30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+      40%, 60% { transform: translate3d(6px, 0, 0); }
+    }
+
+    .idle-msg { font-size: 14px; color: rgba(255, 255, 255, 0.45); text-align: center; font-weight: 600; }
+
+    .target {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      user-select: none;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(5px);
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+      animation: popIn 0.25s forwards;
+      transition: transform 0.1s;
+    }
+
+    .target:hover { transform: scale(1.1); }
+    .target.bomb { box-shadow: 0 0 25px rgba(255, 0, 85, 0.8); background: rgba(255, 0, 85, 0.25); }
+    .target.diamond { box-shadow: 0 0 25px rgba(255, 230, 0, 0.8); background: rgba(255, 230, 0, 0.25); }
+
+    @keyframes popIn { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+    .floating-score {
+      position: absolute;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 800;
+      font-size: 16px;
+      pointer-events: none;
+      animation: floatUp 0.8s ease-out forwards;
+    }
+
+    @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-40px) scale(1.1); opacity: 0; } }
+
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .card-header h2 { font-family: 'Orbitron', sans-serif; font-size: 18px; color: var(--primary); letter-spacing: 1px; }
+
+    .lock-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 0, 85, 0.4);
+      color: #ff5577;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .lock-btn:hover { background: var(--accent); color: #fff; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th { font-size: 11px; color: #777; text-transform: uppercase; text-align: left; padding: 8px; }
+    td { padding: 10px 8px; border-radius: 8px; font-size: 14px; font-weight: 600; }
+    tr:nth-child(even) td { background: rgba(255, 255, 255, 0.02); }
+
+    .rank-1 td { color: #ffe600 !important; background: linear-gradient(90deg, rgba(255, 230, 0, 0.12), transparent) !important; }
+    .rank-2 td { color: #d1d5db !important; }
+    .rank-3 td { color: #f59e0b !important; }
+
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.88);
+      backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: all 0.3s ease; z-index: 100;
+    }
+    .modal-overlay.active { opacity: 1; pointer-events: auto; }
+    .modal {
+      background: #151829; border: 2px solid var(--primary); border-radius: 24px;
+      padding: 26px; text-align: center; width: 90%; max-width: 420px;
+    }
+    .modal h2 { font-family: 'Orbitron', sans-serif; font-size: 22px; margin-bottom: 6px; }
+    .modal .final-score { font-family: 'Orbitron', sans-serif; font-size: 46px; color: var(--warning); margin: 10px 0; }
+
+    #confettiCanvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 99; }
+  </style>
+</head>
+<body>
+
+  <!-- Audio Element for Remote Voice Player -->
+  <audio id="remoteAudio" autoplay playsinline></audio>
+
+  <!-- Background Animated Elements -->
+  <canvas id="bgCanvas"></canvas>
+  <div class="cyber-grid-floor"></div>
+  <canvas id="confettiCanvas"></canvas>
+
+  <header>
+    <h1>⚡ REFLEX RUSH ⚡</h1>
+    <div class="badge-sub">Anti-Spam & Reaction Algorithm Active 🛡️</div>
+  </header>
+
+  <!-- 🎙️ REAL-TIME VOICE COMMS STATION -->
+  <div class="voice-comms-card">
+    <div class="voice-id-tag">
+      <div class="wave-pulse"></div>
+      <span>Your ID:</span>
+      <span class="voice-id-badge" id="myPeerIdDisplay" title="Click to copy ID" onclick="copyMyId()">Connecting...</span>
+    </div>
+
+    <div class="voice-join-box">
+      <input type="text" id="remotePeerIdInput" placeholder="Friend ka Voice ID daalo...">
+      <button class="voice-btn" onclick="startVoiceCall()">CALL 📞</button>
+    </div>
+
+    <div class="mic-controls">
+      <button class="mic-toggle-btn" id="micToggleBtn" onclick="toggleMic()">🎙️ Mic ON</button>
+      <span id="voiceStatusText" style="font-size:11px; color:#94a3b8;">Ready</span>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Game Arena Card -->
+    <div class="card">
+      
+      <!-- Vector Animated Panda Mascot -->
+      <div class="mascot-container">
+        <div class="panda-character" id="pandaCharacter">
+          <div class="ear left"></div>
+          <div class="ear right"></div>
+          <div class="bamboo"></div>
+          <div class="head">
+            <div class="eye-patch left"><div class="pupil"></div></div>
+            <div class="eye-patch right"><div class="pupil"></div></div>
+            <div class="nose"></div>
+            <div class="mouth"></div>
+            <div class="blush left"></div>
+            <div class="blush right"></div>
+          </div>
+        </div>
+        <div class="panda-dialogue" id="pandaDialogue">🐼 "Rule: Faltu click mat karna, accuracy giregi!"</div>
+      </div>
+
+      <div class="controls">
+        <input type="text" id="playerName" placeholder="Gamertag..." maxlength="12">
+        <button class="btn" id="startBtn" onclick="startGame()">PLAY 🔥</button>
+      </div>
+
+      <!-- 4-Stat Bar (Time, Score, Accuracy, Combo) -->
+      <div class="stats">
+        <div class="stat-pill">
+          <div class="stat-label">Time</div>
+          <div class="stat-val" id="timerDisplay">15s</div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-label">Score</div>
+          <div class="stat-val" id="scoreDisplay">0</div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-label">Accuracy</div>
+          <div class="stat-val" id="accuracyDisplay">100%</div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-label">Combo</div>
+          <div class="stat-val" id="streakDisplay">1x</div>
+        </div>
+      </div>
+
+      <!-- Arena with Click Listener for Miss Detection -->
+      <div id="arena" onmousedown="handleArenaMiss(event)">
+        <div class="idle-msg" id="idleMsg">🚀 Gamertag daalo aur PLAY dabao!</div>
+      </div>
+    </div>
+
+    <!-- Leaderboard Card -->
+    <div class="card">
+      <div class="card-header">
+        <h2>🏆 HALL OF FAME</h2>
+        <button class="lock-btn" onclick="clearLeaderboardSecure()">🔒 Reset</button>
+      </div>
+      <p style="font-size:11px; color:#888; margin-bottom:10px;">
+        Criteria: Min <strong>200 Score</strong> & <strong>70% Accuracy</strong> required!
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Player</th>
+            <th>Score</th>
+            <th>Acc%</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboardBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Game Over Modal -->
+  <div class="modal-overlay" id="gameOverModal">
+    <div class="modal">
+      <h2 id="modalTitle">MATCH RESULT</h2>
+      <div class="final-score" id="finalScoreVal">0</div>
+      <p id="modalAccInfo" style="color:#aaa; font-size:13px; margin-bottom:6px;"></p>
+      <p id="modalSub" style="color:#00f0ff; margin-bottom:18px; font-weight:700;"></p>
+      <button class="btn" onclick="closeModal()">Play Again 🔄</button>
+    </div>
+  </div>
+
+  <script>
+    // 🔒 ADMIN SECRET PIN
+    const ADMIN_PIN = "1234";
+
+    // ==========================================
+    // 🧠 ESPORTS QUALIFICATION & REACTION ALGORITHM
+    // ==========================================
+    let score = 0;
+    let timeLeft = 15;
+    let combo = 1;
+    let totalHits = 0;
+    let totalMisses = 0;
+    let targetSpawnTime = 0;
+    let lastHitTime = 0;
+    let gameInterval = null;
+    let targetTimeout = null;
+    let isPlaying = false;
+
+    const normalEmojis = ['⚡', '🔥', '🎯', '🚀', '⭐', '👾', '🎉'];
+    const arena = document.getElementById('arena');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const streakDisplay = document.getElementById('streakDisplay');
+    const accuracyDisplay = document.getElementById('accuracyDisplay');
+    const nameInput = document.getElementById('playerName');
+    const startBtn = document.getElementById('startBtn');
+    const leaderboardBody = document.getElementById('leaderboardBody');
+    const modal = document.getElementById('gameOverModal');
+
+    window.onload = renderLeaderboard;
+
+    function startGame() {
+      const name = nameInput.value.trim();
+      if (!name) {
+        shakeInput();
+        return;
+      }
+      if (isPlaying) return;
+
+      AudioEngine.init();
+      isPlaying = true;
+      score = 0;
+      timeLeft = 15;
+      combo = 1;
+      totalHits = 0;
+      totalMisses = 0;
+
+      scoreDisplay.innerText = score;
+      timerDisplay.innerText = timeLeft + 's';
+      streakDisplay.innerText = '1x';
+      accuracyDisplay.innerText = '100%';
+      nameInput.disabled = true;
+      startBtn.disabled = true;
+      arena.innerHTML = '';
+
+      setPandaReaction('happy', `🐼 "${name}, precision par focus karo! Miss mat karna!"`, 1500);
+      spawnTarget();
+
+      gameInterval = setInterval(() => {
+        timeLeft--;
+        timerDisplay.innerText = timeLeft + 's';
+        if (timeLeft <= 0) endGame();
+      }, 1000);
+    }
+
+    function updateAccuracy() {
+      const totalClicks = totalHits + totalMisses;
+      const acc = totalClicks === 0 ? 100 : Math.round((totalHits / totalClicks) * 100);
+      accuracyDisplay.innerText = acc + '%';
+
+      if (acc < 70) {
+        accuracyDisplay.style.color = '#ff0055';
+      } else {
+        accuracyDisplay.style.color = '#00ff66';
+      }
+      return acc;
+    }
+
+    // 🎯 ANTI-SPAM: Empty arena click = MISS
+    function handleArenaMiss(e) {
+      if (!isPlaying) return;
+      if (e.target.classList.contains('target')) return; // Target hit, not miss
+
+      totalMisses++;
+      combo = 1; // Drop combo on miss
+      streakDisplay.innerText = '1x';
+      score = Math.max(0, score - 5);
+      scoreDisplay.innerText = score;
+      updateAccuracy();
+
+      AudioEngine.playMiss();
+      showFloatingText(e.offsetX, e.offsetY, 'MISS -5', '#ff0055');
+      setPandaReaction('shocked', "🐼 'Miss ho gaya! Aim theek karo!'", 600);
+    }
+
+    function spawnTarget() {
+      if (!isPlaying) return;
+      arena.innerHTML = '';
+
+      const target = document.createElement('div');
+      target.className = 'target';
+
+      // 🎯 DYNAMIC SHRINK: Target shrinks as score climbs
+      let targetSize = 58;
+      if (score > 150) targetSize = 48;
+      if (score > 300) targetSize = 40;
+      target.style.width = targetSize + 'px';
+      target.style.height = targetSize + 'px';
+      target.style.fontSize = (targetSize - 20) + 'px';
+
+      const rand = Math.random();
+      let type = 'normal';
+      let icon = normalEmojis[Math.floor(Math.random() * normalEmojis.length)];
+
+      if (rand < 0.16) {
+        type = 'bomb';
+        icon = '💣';
+        target.classList.add('bomb');
+      } else if (rand < 0.32) {
+        type = 'diamond';
+        icon = '💎';
+        target.classList.add('diamond');
+      }
+
+      target.innerText = icon;
+
+      const maxX = arena.clientWidth - targetSize - 10;
+      const maxY = arena.clientHeight - targetSize - 10;
+      const x = Math.max(10, Math.floor(Math.random() * maxX));
+      const y = Math.max(10, Math.floor(Math.random() * maxY));
+
+      target.style.left = `${x}px`;
+      target.style.top = `${y}px`;
+
+      targetSpawnTime = Date.now();
+
+      target.onmousedown = (e) => {
+        e.stopPropagation(); // Stop arena miss trigger
+        handleTargetClick(e, type, x, y);
+      };
+
+      arena.appendChild(target);
+
+      // Speed scale
+      const delay = Math.max(480, 850 - (15 - timeLeft) * 25);
+      targetTimeout = setTimeout(spawnTarget, delay);
+    }
+
+    function handleTargetClick(e, type, x, y) {
+      if (!isPlaying) return;
+      clearTimeout(targetTimeout);
+
+      const reactionTime = Date.now() - targetSpawnTime;
+      totalHits++;
+      updateAccuracy();
+
+      // Combo System
+      const now = Date.now();
+      if (now - lastHitTime < 600) {
+        combo = Math.min(combo + 1, 4);
+      } else {
+        combo = 1;
+      }
+      lastHitTime = now;
+      streakDisplay.innerText = `${combo}x`;
+
+      if (type === 'bomb') {
+        AudioEngine.playBomb();
+        score = Math.max(0, score - 20);
+        combo = 1;
+        streakDisplay.innerText = '1x';
+        triggerScreenShake();
+        showFloatingText(x, y, '-20 💣', '#ff0055');
+        setPandaReaction('shocked', "🐼 'BOMB! Combo reset ho gaya!'", 800);
+      } else if (type === 'diamond') {
+        AudioEngine.playDiamond();
+        const pts = 25 * combo;
+        score += pts;
+        showFloatingText(x, y, `+${pts} 💎`, '#ffe600');
+        setPandaReaction('happy', "🐼 'DIAMOND! +25 Points!'", 800);
+      } else {
+        // ⚡ REACTION SPEED ALGORITHM
+        let basePts = 10;
+        if (reactionTime < 300) basePts = 20;       // Godlike reflex
+        else if (reactionTime < 500) basePts = 15;  // Fast reflex
+        else basePts = 10;                          // Normal reflex
+
+        const earned = basePts * combo;
+        score += earned;
+        AudioEngine.playPop();
+
+        const tag = reactionTime < 300 ? `+${earned} (FAST!)` : `+${earned}`;
+        showFloatingText(x, y, tag, '#00f0ff');
+
+        if (combo >= 3) setPandaReaction('happy', `🐼 '${combo}X COMBO! Gajab!' 🔥`, 600);
+      }
+
+      scoreDisplay.innerText = score;
+      spawnTarget();
+    }
+
+    function endGame() {
+      clearInterval(gameInterval);
+      clearTimeout(targetTimeout);
+      isPlaying = false;
+      arena.innerHTML = `<div class="idle-msg">Time's Up! Calculating Rank...</div>`;
+      nameInput.disabled = false;
+      startBtn.disabled = false;
+
+      AudioEngine.playGameOver();
+
+      const finalAcc = updateAccuracy();
+      document.getElementById('finalScoreVal').innerText = score;
+      document.getElementById('modalAccInfo').innerText = `Hits: ${totalHits} | Misses: ${totalMisses} | Accuracy: ${finalAcc}%`;
+
+      // 🛡️ RANK ALGORITHM EVALUATION (Min 200 Score & Min 70% Accuracy)
+      const qualifies = (score >= 200) && (finalAcc >= 70);
+
+      if (qualifies) {
+        saveScore(nameInput.value.trim(), score, finalAcc);
+        renderLeaderboard();
+        document.getElementById('modalSub').innerText = "✅ QUALIFIED! Aapka score Leaderboard par chadh gaya!";
+        setPandaReaction('happy', "🐼 'KAMAAL! Leaderboard qualified!' 🏆", 4000);
+        startConfetti();
+      } else {
+        let reason = "";
+        if (finalAcc < 70) reason = "❌ Accuracy kam thi (<70%). Spam mat karo!";
+        else reason = "❌ Minimum 200 Score chahiye Leaderboard ke liye!";
+
+        document.getElementById('modalSub').innerText = reason;
+        setPandaReaction('shocked', "🐼 'Leaderboard me aane ke liye acche score & accuracy chahiye!'", 4000);
+      }
+
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      modal.classList.remove('active');
+      stopConfetti();
+    }
+
+    function shakeInput() {
+      nameInput.style.borderColor = 'var(--accent)';
+      nameInput.placeholder = "⚠️ Gamertag likho!";
+      setPandaReaction('shocked', "🐼 'Pehle naam toh likho!'", 1200);
+      setTimeout(() => { nameInput.style.borderColor = ''; }, 1000);
+    }
+
+    function triggerScreenShake() {
+      arena.classList.add('shake');
+      setTimeout(() => arena.classList.remove('shake'), 400);
+    }
+
+    function showFloatingText(x, y, text, color) {
+      const floatEl = document.createElement('div');
+      floatEl.className = 'floating-score';
+      floatEl.innerText = text;
+      floatEl.style.color = color;
+      floatEl.style.left = `${x}px`;
+      floatEl.style.top = `${y}px`;
+      arena.appendChild(floatEl);
+      setTimeout(() => floatEl.remove(), 800);
+    }
+
+    // ==========================================
+    // 🔒 SECURE LEADERBOARD (ADMIN PIN PROTECTED)
+    // ==========================================
+    function getLeaderboard() {
+      const data = localStorage.getItem('esports_reflex_scores');
+      return data ? JSON.parse(data) : [];
+    }
+
+    function saveScore(name, newScore, acc) {
+      const board = getLeaderboard();
+      board.push({ name: name, score: newScore, acc: acc });
+      board.sort((a, b) => b.score - a.score);
+      localStorage.setItem('esports_reflex_scores', JSON.stringify(board.slice(0, 6)));
+    }
+
+    function renderLeaderboard() {
+      const board = getLeaderboard();
+      leaderboardBody.innerHTML = '';
+
+      if (board.length === 0) {
+        leaderboardBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#555; padding:15px;">Sirf 200+ Score aur 70%+ Accuracy wale yaha aayenge!</td></tr>`;
+        return;
+      }
+
+      board.forEach((item, index) => {
+        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`;
+        const row = `
+          <tr class="rank-${index + 1}">
+            <td>${medal}</td>
+            <td>${item.name}</td>
+            <td style="font-family:'Orbitron'; font-weight:800;">${item.score}</td>
+            <td style="color:#00ff66;">${item.acc || 100}%</td>
+          </tr>
+        `;
+        leaderboardBody.innerHTML += row;
+      });
+    }
+
+    function clearLeaderboardSecure() {
+      const enteredPin = prompt("🔒 Admin Protection!\nSirf Teacher/Host reset kar sakte hain.\nAdmin PIN daalo:");
+      if (enteredPin === null) return;
+      if (enteredPin === ADMIN_PIN) {
+        localStorage.removeItem('esports_reflex_scores');
+        renderLeaderboard();
+        alert("✅ Leaderboard successfully Reset ho gaya!");
+      } else {
+        alert("❌ Galat Password! Leaderboard sirf Admin reset kar sakte hain!");
+      }
+    }
+
+    // ==========================================
+    // 🎙️ P2P WEBRTC VOICE CHAT ENGINE (PeerJS)
+    // ==========================================
+    let peer = null;
+    let localStream = null;
+    let isMicMuted = false;
+
+    const myPeerIdDisplay = document.getElementById('myPeerIdDisplay');
+    const remotePeerIdInput = document.getElementById('remotePeerIdInput');
+    const voiceStatusText = document.getElementById('voiceStatusText');
+    const micToggleBtn = document.getElementById('micToggleBtn');
+    const remoteAudio = document.getElementById('remoteAudio');
+
+    const customId = "panda-" + Math.floor(1000 + Math.random() * 9000);
+
+    function initVoice() {
+      peer = new Peer(customId);
+      peer.on('open', (id) => {
+        myPeerIdDisplay.innerText = id;
+        voiceStatusText.innerText = "Online";
+      });
+      peer.on('call', async (call) => {
+        await ensureMic();
+        call.answer(localStream);
+        call.on('stream', (stream) => {
+          remoteAudio.srcObject = stream;
+          voiceStatusText.innerText = "🟢 Connected";
+        });
+      });
+    }
+
+    async function ensureMic() {
+      if (!localStream) {
+        try { 
+          localStream = await navigator.mediaDevices.getUserMedia({ audio: true }); 
+        } catch (e) { 
+          alert("Mic permission allow karein voice call ke liye!"); 
+        }
+      }
+    }
+
+    async function startVoiceCall() {
+      const targetId = remotePeerIdInput.value.trim();
+      if (!targetId || targetId === peer.id) return;
+      await ensureMic();
+      if (!localStream) return;
+      const call = peer.call(targetId, localStream);
+      call.on('stream', (stream) => {
+        remoteAudio.srcObject = stream;
+        voiceStatusText.innerText = "🟢 Connected";
+      });
+    }
+
+    function toggleMic() {
+      if (!localStream) { ensureMic(); return; }
+      isMicMuted = !isMicMuted;
+      localStream.getAudioTracks()[0].enabled = !isMicMuted;
+      micToggleBtn.innerText = isMicMuted ? "🔇 Muted" : "🎙️ Mic ON";
+      micToggleBtn.classList.toggle('muted', isMicMuted);
+    }
+
+    function copyMyId() {
+      if (peer && peer.id) {
+        navigator.clipboard.writeText(peer.id);
+        alert(`Aapka Voice ID (${peer.id}) copy ho gaya! Doston ko bhejo.`);
+      }
+    }
+    initVoice();
+
+    // ==========================================
+    // 🎵 WEB AUDIO SYNTHESIZER
+    // ==========================================
+    const AudioEngine = {
+      ctx: null,
+      init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+      playPop() {
+        this.init();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.frequency.setValueAtTime(500, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(850, this.ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.08);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.08);
+      },
+      playMiss() {
+        this.init();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.06);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.06);
+      },
+      playDiamond() {
+        this.init();
+        [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle'; osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.2, this.ctx.currentTime + idx * 0.05);
+          gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + idx * 0.05 + 0.12);
+          osc.connect(gain); gain.connect(this.ctx.destination);
+          osc.start(this.ctx.currentTime + idx * 0.05);
+          osc.stop(this.ctx.currentTime + idx * 0.05 + 0.12);
+        });
+      },
+      playBomb() {
+        this.init();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.25);
+        gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.25);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + 0.25);
+      },
+      playGameOver() {
+        this.init();
+        [440, 392, 349, 293].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.2, this.ctx.currentTime + idx * 0.1);
+          gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + idx * 0.1 + 0.15);
+          osc.connect(gain); gain.connect(this.ctx.destination);
+          osc.start(this.ctx.currentTime + idx * 0.1);
+          osc.stop(this.ctx.currentTime + idx * 0.1 + 0.15);
+        });
+      }
+    };
+
+    // ==========================================
+    // 🐼 PANDA MOOD CONTROLLER
+    // ==========================================
+    const pandaChar = document.getElementById('pandaCharacter');
+    const pandaMsg = document.getElementById('pandaDialogue');
+    let pandaTimer = null;
+
+    function setPandaReaction(mood, text, duration = 850) {
+      clearTimeout(pandaTimer);
+      pandaChar.classList.remove('happy', 'shocked');
+      if (mood === 'happy') pandaChar.classList.add('happy');
+      if (mood === 'shocked') pandaChar.classList.add('shocked');
+      pandaMsg.innerText = text;
+      pandaTimer = setTimeout(() => {
+        pandaChar.classList.remove('happy', 'shocked');
+        pandaMsg.innerText = isPlaying ? "🐼 Accuracy 70% se upar rakhna!" : "🐼 Top rank ke liye precision chahiye!";
+      }, duration);
+    }
+
+    // ==========================================
+    // 🌌 BACKGROUND PARTICLES
+    // ==========================================
+    const bgCanvas = document.getElementById('bgCanvas');
+    const bgCtx = bgCanvas.getContext('2d');
+    let bgParticles = [];
+
+    function resizeBg() {
+      bgCanvas.width = window.innerWidth;
+      bgCanvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeBg);
+    resizeBg();
+
+    for (let i = 0; i < 40; i++) {
+      bgParticles.push({
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight,
+        radius: Math.random() * 2 + 0.8,
+        speedY: Math.random() * 0.6 + 0.2,
+        speedX: (Math.random() - 0.5) * 0.4,
+        alpha: Math.random() * 0.7 + 0.3,
+        color: ['#00f0ff', '#ff0055', '#ffe600'][Math.floor(Math.random() * 3)]
+      });
+    }
+
+    function animateBackground() {
+      bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+      bgParticles.forEach(p => {
+        p.y -= p.speedY; p.x += p.speedX;
+        if (p.y < 0) { p.y = bgCanvas.height; p.x = Math.random() * bgCanvas.width; }
+        bgCtx.save();
+        bgCtx.globalAlpha = p.alpha;
+        bgCtx.fillStyle = p.color;
+        bgCtx.shadowBlur = 8;
+        bgCtx.shadowColor = p.color;
+        bgCtx.beginPath();
+        bgCtx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        bgCtx.fill();
+        bgCtx.restore();
+      });
+      requestAnimationFrame(animateBackground);
+    }
+    animateBackground();
+
+    // ==========================================
+    // 🎉 CONFETTI
+    // ==========================================
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const confettiCtx = confettiCanvas.getContext('2d');
+    let confettiParticles = [];
+    let confettiActive = false;
+
+    function resizeConfetti() {
+      confettiCanvas.width = window.innerWidth;
+      confettiCanvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeConfetti);
+    resizeConfetti();
+
+    function startConfetti() {
+      confettiParticles = [];
+      for (let i = 0; i < 80; i++) {
+        confettiParticles.push({
+          x: confettiCanvas.width / 2, y: confettiCanvas.height / 2,
+          vx: (Math.random() - 0.5) * 16, vy: (Math.random() - 0.5) * 16 - 3,
+          size: Math.random() * 8 + 4,
+          color: ['#00f0ff', '#ff0055', '#ffe600', '#ffffff'][Math.floor(Math.random() * 4)],
+          rot: Math.random() * 360, rotSpeed: (Math.random() - 0.5) * 10
+        });
+      }
+      confettiActive = true;
+      animateConfetti();
+    }
+
+    function animateConfetti() {
+      if (!confettiActive) { confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height); return; }
+      confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+      confettiParticles.forEach(p => {
+        p.x += p.vx; p.y += p.vy; p.vy += 0.3; p.rot += p.rotSpeed;
+        confettiCtx.save();
+        confettiCtx.translate(p.x, p.y);
+        confettiCtx.rotate((p.rot * Math.PI) / 180);
+        confettiCtx.fillStyle = p.color;
+        confettiCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+        confettiCtx.restore();
+      });
+      requestAnimationFrame(animateConfetti);
+    }
+
+    function stopConfetti() { confettiActive = false; }
+  </script>
+</body>
+</html>
